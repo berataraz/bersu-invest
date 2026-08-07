@@ -1,0 +1,4 @@
+import { notFound } from "next/navigation";
+import { PropertyCard, PageHero } from "@/components/public/public-ui";
+import { type Locale, properties, regions } from "@/features/public-site/content";
+export default async function RegionDetail({ params }: { params: Promise<{ locale: Locale; slug: string }> }) { const { locale, slug } = await params; const region = regions.find((item) => item.slug === slug); if (!region) notFound(); return <><PageHero eyebrow="Bölge rehberi" title={region.name} description={region.description} image={region.image} /><section className="mx-auto max-w-[1440px] px-5 py-14 sm:px-8 lg:px-12"><h2 className="font-display text-4xl font-semibold">{region.name} seçkisi</h2><div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">{properties.slice(0, 3).map((property, index) => <PropertyCard key={property.slug} property={property} locale={locale} index={index} />)}</div></section></>; }

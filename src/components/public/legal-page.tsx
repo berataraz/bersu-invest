@@ -1,0 +1,4 @@
+import { type ReactNode } from "react";
+
+export function LegalPage({ title, updated, children }: { title: string; updated: string; children: ReactNode }) { return <article className="mx-auto max-w-3xl px-5 py-16 sm:px-8 lg:py-24"><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gold-strong">Yasal bilgilendirme</p><h1 className="mt-4 font-display text-5xl font-semibold">{title}</h1><p className="mt-4 text-sm text-ink-muted">Son güncelleme: {updated}</p><div className="mt-12 space-y-9 text-sm leading-7 text-ink-muted">{children}</div></article>; }
+export function LegalSection({ title, children }: { title: string; children: ReactNode }) { return <section><h2 className="font-display text-3xl font-semibold text-ink">{title}</h2><div className="mt-3 space-y-4">{children}</div></section>; }

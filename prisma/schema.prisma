@@ -1,0 +1,974 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum PermissionEffect {
+  ALLOW
+  DENY
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  RESTORE
+  LOGIN
+  LOGIN_FAILED
+  LOGOUT
+  PASSWORD_RESET_REQUESTED
+  PASSWORD_RESET_COMPLETED
+  PASSWORD_CHANGED
+  EMAIL_VERIFIED
+  TWO_FACTOR_ENABLED
+  TWO_FACTOR_DISABLED
+  SESSION_REVOKED
+}
+
+enum PropertyStatus {
+  DRAFT
+  PUBLISHED
+  RESERVED
+  SOLD
+  RENTED
+  ARCHIVED
+}
+
+enum ListingType {
+  FOR_SALE
+  FOR_RENT
+  DAILY_RENT
+}
+
+enum PropertyMediaKind {
+  IMAGE
+  VIDEO
+  VIRTUAL_TOUR
+  DOCUMENT
+  FLOOR_PLAN
+}
+
+enum CustomerStatus {
+  LEAD
+  PROSPECT
+  ACTIVE
+  INACTIVE
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  VIEWING
+  OFFER
+  WON
+  LOST
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  READ
+  FAILED
+}
+
+enum LanguageDirection {
+  LTR
+  RTL
+}
+
+enum AiProvider {
+  OPENAI
+  GOOGLE_GEMINI
+  ANTHROPIC_CLAUDE
+  DEEPSEEK
+  OPENROUTER
+}
+
+enum AiTask {
+  PROPERTY_SEARCH
+  LISTING_GENERATION
+  TRANSLATION
+  VISITOR_CHAT
+  ADMIN_ANALYSIS
+  CRM_ASSISTANT
+}
+
+enum AiConversationStatus {
+  ACTIVE
+  ARCHIVED
+  CLOSED
+}
+
+enum AiMessageRole {
+  SYSTEM
+  USER
+  ASSISTANT
+  TOOL
+}
+
+enum AiUsageStatus {
+  SUCCEEDED
+  FAILED
+  RATE_LIMITED
+  BLOCKED
+}
+
+enum ImportRecordStatus {
+  DISCOVERED
+  DRAFT
+  REVIEWED
+  PUBLISHED
+  SKIPPED
+  DUPLICATE
+  FAILED
+}
+
+model User {
+  id                 String     @id @default(uuid()) @db.Uuid
+  email              String     @unique @db.Citext
+  emailVerified      DateTime?
+  passwordHash       String?
+  firstName          String
+  lastName           String
+  image              String?
+  phone              String?
+  whatsapp           String?
+  jobTitle           String?
+  biography          String?    @db.Text
+  preferredLocales   String[]   @default([])
+  socialLinks        Json?      @db.JsonB
+  displayOrder       Int        @default(0)
+  status             UserStatus @default(INVITED)
+  mustChangePassword Boolean    @default(false)
+  failedLoginCount   Int        @default(0)
+  lockedUntil        DateTime?
+  lastLoginAt        DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  deletedAt          DateTime?
+
+  accounts                 Account[]
+  sessions                 Session[]
+  roles                    UserRole[]                @relation("UserRoles")
+  roleAssignmentsMade      UserRole[]                @relation("RoleAssignedBy")
+  permissionOverrides      UserPermission[]          @relation("UserPermissionOverrides")
+  permissionsGranted       UserPermission[]          @relation("PermissionAssignedBy")
+  refreshTokens            RefreshToken[]
+  authSessions             AuthSession[]
+  passwordResetTokens      PasswordResetToken[]
+  emailTokens              EmailVerificationToken[]
+  twoFactor                TwoFactorCredential?
+  auditLogs                AuditLog[]                @relation("AuditActor")
+  propertiesCreated        Property[]                @relation("PropertyCreatedBy")
+  propertiesUpdated        Property[]                @relation("PropertyUpdatedBy")
+  propertiesAssigned       Property[]                @relation("PropertyAssignedAgent")
+  customersOwned           Customer[]                @relation("CustomerOwner")
+  customerNotes            CustomerNote[]            @relation("CustomerNoteAuthor")
+  leadsOwned               Lead[]                    @relation("LeadOwner")
+  leadActivities           LeadActivity[]            @relation("LeadActivityAuthor")
+  appointmentsOwned        Appointment[]             @relation("AppointmentOwner")
+  tasksAssigned            Task[]                    @relation("TaskAssignee")
+  tasksCreated             Task[]                    @relation("TaskCreator")
+  followUpsOwned           FollowUp[]                @relation("FollowUpOwner")
+  notifications            Notification[]
+  aiProviderConfigsCreated AiProviderConfiguration[] @relation("AiProviderConfigCreatedBy")
+  aiProviderConfigsUpdated AiProviderConfiguration[] @relation("AiProviderConfigUpdatedBy")
+  aiPromptTemplatesCreated AiPromptTemplate[]        @relation("AiPromptTemplateCreatedBy")
+  aiConversations          AiConversation[]
+  aiUsageLogs              AiUsageLog[]
+  importReviews            ImportRecord[]            @relation("ImportReviewedBy")
+
+  @@index([status, deletedAt])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String   @db.Uuid
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Role {
+  id          String    @id @default(uuid()) @db.Uuid
+  key         String    @unique
+  name        String
+  description String?   @db.Text
+  isSystem    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  permissions RolePermission[]
+  users       UserRole[]
+}
+
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  resource    String
+  action      String
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roles      RolePermission[]
+  userGrants UserPermission[] @relation("UserPermissionOverrides")
+
+  @@unique([resource, action])
+}
+
+model RolePermission {
+  roleId       String   @db.Uuid
+  permissionId String   @db.Uuid
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+model UserRole {
+  userId       String    @db.Uuid
+  roleId       String    @db.Uuid
+  assignedById String?   @db.Uuid
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  user       User  @relation("UserRoles", fields: [userId], references: [id], onDelete: Cascade)
+  role       Role  @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  assignedBy User? @relation("RoleAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@index([expiresAt])
+}
+
+model UserPermission {
+  userId       String           @db.Uuid
+  permissionId String           @db.Uuid
+  effect       PermissionEffect @default(ALLOW)
+  assignedById String?          @db.Uuid
+  expiresAt    DateTime?
+  createdAt    DateTime         @default(now())
+
+  user       User       @relation("UserPermissionOverrides", fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation("UserPermissionOverrides", fields: [permissionId], references: [id], onDelete: Cascade)
+  assignedBy User?      @relation("PermissionAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@id([userId, permissionId])
+  @@index([permissionId])
+  @@index([expiresAt])
+}
+
+model AuthSession {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  familyId     String    @db.Uuid
+  userAgent    String?   @db.Text
+  ipHash       String?
+  lastSeenAt   DateTime  @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  revokeReason String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+
+  @@index([userId, revokedAt, expiresAt])
+  @@index([familyId])
+}
+
+model RefreshToken {
+  id           String    @id @default(uuid()) @db.Uuid
+  sessionId    String    @db.Uuid
+  userId       String    @db.Uuid
+  familyId     String    @db.Uuid
+  tokenHash    String    @unique
+  expiresAt    DateTime
+  lastUsedAt   DateTime?
+  revokedAt    DateTime?
+  replacedById String?   @unique @db.Uuid
+  createdAt    DateTime  @default(now())
+
+  session       AuthSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replacedBy    RefreshToken? @relation("TokenRotation", fields: [replacedById], references: [id], onDelete: SetNull)
+  replacedToken RefreshToken? @relation("TokenRotation")
+
+  @@index([userId, revokedAt, expiresAt])
+  @@index([familyId, revokedAt])
+  @@index([sessionId])
+}
+
+model PasswordResetToken {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @db.Uuid
+  tokenHash       String    @unique
+  expiresAt       DateTime
+  usedAt          DateTime?
+  requestedIpHash String?
+  createdAt       DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model TwoFactorCredential {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @unique @db.Uuid
+  encryptedSecret    String
+  isEnabled          Boolean   @default(false)
+  enabledAt          DateTime?
+  recoveryCodeHashes String[]
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String      @id @default(uuid()) @db.Uuid
+  actorId    String?     @db.Uuid
+  action     AuditAction
+  entityType String
+  entityId   String?     @db.Uuid
+  before     Json?       @db.JsonB
+  after      Json?       @db.JsonB
+  ipHash     String?
+  userAgent  String?     @db.Text
+  requestId  String?
+  occurredAt DateTime    @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, occurredAt(sort: Desc)])
+  @@index([actorId, occurredAt(sort: Desc)])
+  @@index([action, occurredAt(sort: Desc)])
+}
+
+model AuthRateLimitEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  keyHash    String
+  endpoint   String
+  occurredAt DateTime @default(now())
+
+  @@index([keyHash, endpoint, occurredAt])
+}
+
+model PropertyType {
+  id        String    @id @default(uuid()) @db.Uuid
+  key       String    @unique
+  name      String
+  isActive  Boolean   @default(true)
+  position  Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  properties Property[]
+}
+
+model PropertyFeature {
+  id           String    @id @default(uuid()) @db.Uuid
+  key          String    @unique
+  name         String
+  groupKey     String?
+  valueType    String    @default("boolean")
+  isFilterable Boolean   @default(true)
+  position     Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  values PropertyFeatureValue[]
+}
+
+model Property {
+  id              String         @id @default(uuid()) @db.Uuid
+  propertyId      String         @unique
+  slug            String         @unique
+  typeId          String         @db.Uuid
+  createdById     String?        @db.Uuid
+  updatedById     String?        @db.Uuid
+  assignedAgentId String?        @db.Uuid
+  status          PropertyStatus @default(DRAFT)
+  listingType     ListingType
+  title           String
+  summary         String?        @db.Text
+  description     String?        @db.Text
+  price           Decimal?       @db.Decimal(14, 2)
+  currencyCode    String         @default("TRY") @db.Char(3)
+  city            String
+  district        String?
+  neighborhood    String?
+  addressLine     String?        @db.Text
+  latitude        Decimal?       @db.Decimal(10, 7)
+  longitude       Decimal?       @db.Decimal(10, 7)
+  grossAreaM2     Decimal?       @db.Decimal(10, 2)
+  netAreaM2       Decimal?       @db.Decimal(10, 2)
+  bedrooms        Int?
+  bathrooms       Int?
+  floors          Int?
+  featured        Boolean        @default(false)
+  publishedAt     DateTime?
+  soldAt          DateTime?
+  rentedAt        DateTime?
+  searchVector    String?        @db.Text
+  details         Json?          @db.JsonB
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+
+  type          PropertyType           @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  createdBy     User?                  @relation("PropertyCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy     User?                  @relation("PropertyUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  assignedAgent User?                  @relation("PropertyAssignedAgent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  features      PropertyFeatureValue[]
+  media         PropertyMedia[]
+  leads         Lead[]
+  appointments  Appointment[]
+  tasks         Task[]
+  analytics     PropertyAnalytics[]
+  aiUsageLogs   AiUsageLog[]
+
+  @@index([status, listingType, publishedAt(sort: Desc), deletedAt])
+  @@index([typeId, status])
+  @@index([city, district, status])
+  @@index([price, currencyCode])
+  @@index([featured, publishedAt(sort: Desc)])
+  @@index([assignedAgentId, status, deletedAt])
+}
+
+model PropertyFeatureValue {
+  id          String   @id @default(uuid()) @db.Uuid
+  propertyId  String   @db.Uuid
+  featureId   String   @db.Uuid
+  valueText   String?
+  valueNumber Decimal? @db.Decimal(14, 4)
+  valueBool   Boolean?
+  valueJson   Json?    @db.JsonB
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  property Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  feature  PropertyFeature @relation(fields: [featureId], references: [id], onDelete: Restrict)
+
+  @@unique([propertyId, featureId])
+  @@index([featureId, valueText])
+  @@index([featureId, valueNumber])
+  @@index([featureId, valueBool])
+}
+
+model PropertyMedia {
+  id         String            @id @default(uuid()) @db.Uuid
+  propertyId String            @db.Uuid
+  kind       PropertyMediaKind
+  url        String            @db.Text
+  storageKey String?
+  title      String?
+  altText    String?
+  mimeType   String?
+  sortOrder  Int               @default(0)
+  isCover    Boolean           @default(false)
+  isPublic   Boolean           @default(true)
+  metadata   Json?             @db.JsonB
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  deletedAt  DateTime?
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, kind, sortOrder])
+  @@index([propertyId, isCover])
+}
+
+model Customer {
+  id              String         @id @default(uuid()) @db.Uuid
+  ownerId         String?        @db.Uuid
+  status          CustomerStatus @default(LEAD)
+  firstName       String
+  lastName        String
+  email           String?        @db.Citext
+  phone           String?
+  nationality     String?
+  preferredLocale String?        @db.VarChar(12)
+  tags            String[]
+  consentAt       DateTime?
+  customFields    Json?          @db.JsonB
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+
+  owner           User?            @relation("CustomerOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  notes           CustomerNote[]
+  leads           Lead[]
+  appointments    Appointment[]
+  tasks           Task[]
+  followUps       FollowUp[]
+  timeline        TimelineEvent[]
+  aiConversations AiConversation[]
+
+  @@index([ownerId, status, deletedAt])
+  @@index([email])
+  @@index([phone])
+  @@index([createdAt(sort: Desc)])
+}
+
+model CustomerNote {
+  id         String    @id @default(uuid()) @db.Uuid
+  customerId String    @db.Uuid
+  authorId   String?   @db.Uuid
+  body       String    @db.Text
+  isPrivate  Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  author   User?    @relation("CustomerNoteAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([customerId, createdAt(sort: Desc)])
+}
+
+model Lead {
+  id              String     @id @default(uuid()) @db.Uuid
+  customerId      String?    @db.Uuid
+  propertyId      String?    @db.Uuid
+  ownerId         String?    @db.Uuid
+  status          LeadStatus @default(NEW)
+  source          String     @default("WEBSITE")
+  title           String
+  budgetMin       Decimal?   @db.Decimal(14, 2)
+  budgetMax       Decimal?   @db.Decimal(14, 2)
+  currencyCode    String?    @db.Char(3)
+  score           Int        @default(0)
+  lostReason      String?    @db.Text
+  customFields    Json?      @db.JsonB
+  lastContactedAt DateTime?
+  nextFollowUpAt  DateTime?
+  closedAt        DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+
+  customer     Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  property     Property?       @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  owner        User?           @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  activities   LeadActivity[]
+  appointments Appointment[]
+  tasks        Task[]
+  followUps    FollowUp[]
+  timeline     TimelineEvent[]
+
+  @@index([ownerId, status, nextFollowUpAt])
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([propertyId])
+  @@index([status, createdAt(sort: Desc)])
+}
+
+model LeadActivity {
+  id         String   @id @default(uuid()) @db.Uuid
+  leadId     String   @db.Uuid
+  authorId   String?  @db.Uuid
+  type       String
+  subject    String?
+  body       String?  @db.Text
+  metadata   Json?    @db.JsonB
+  occurredAt DateTime @default(now())
+
+  lead   Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  author User? @relation("LeadActivityAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([leadId, occurredAt(sort: Desc)])
+}
+
+model Appointment {
+  id         String            @id @default(uuid()) @db.Uuid
+  customerId String?           @db.Uuid
+  leadId     String?           @db.Uuid
+  propertyId String?           @db.Uuid
+  ownerId    String?           @db.Uuid
+  status     AppointmentStatus @default(PENDING)
+  title      String
+  startsAt   DateTime
+  endsAt     DateTime
+  timezone   String            @default("Europe/Istanbul")
+  location   String?
+  notes      String?           @db.Text
+  outcome    String?           @db.Text
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  deletedAt  DateTime?
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lead     Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  owner    User?     @relation("AppointmentOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, startsAt])
+  @@index([customerId, startsAt])
+  @@index([leadId, startsAt])
+}
+
+model Task {
+  id           String       @id @default(uuid()) @db.Uuid
+  customerId   String?      @db.Uuid
+  leadId       String?      @db.Uuid
+  propertyId   String?      @db.Uuid
+  assignedToId String?      @db.Uuid
+  createdById  String?      @db.Uuid
+  title        String
+  description  String?      @db.Text
+  status       TaskStatus   @default(TODO)
+  priority     TaskPriority @default(MEDIUM)
+  dueAt        DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lead       Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  assignedTo User?     @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy  User?     @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([assignedToId, status, dueAt])
+  @@index([customerId])
+  @@index([leadId])
+}
+
+model FollowUp {
+  id          String    @id @default(uuid()) @db.Uuid
+  customerId  String?   @db.Uuid
+  leadId      String?   @db.Uuid
+  ownerId     String?   @db.Uuid
+  dueAt       DateTime
+  completedAt DateTime?
+  note        String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lead     Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  owner    User?     @relation("FollowUpOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, dueAt])
+  @@index([leadId, dueAt])
+}
+
+model TimelineEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  customerId String?  @db.Uuid
+  leadId     String?  @db.Uuid
+  type       String
+  label      String
+  metadata   Json?    @db.JsonB
+  occurredAt DateTime @default(now())
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  lead     Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, occurredAt(sort: Desc)])
+  @@index([leadId, occurredAt(sort: Desc)])
+}
+
+model Notification {
+  id        String             @id @default(uuid()) @db.Uuid
+  userId    String             @db.Uuid
+  status    NotificationStatus @default(PENDING)
+  type      String
+  title     String
+  body      String?            @db.Text
+  payload   Json?              @db.JsonB
+  readAt    DateTime?
+  sentAt    DateTime?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  deletedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, createdAt(sort: Desc)])
+}
+
+model Language {
+  id          String            @id @default(uuid()) @db.Uuid
+  code        String            @unique @db.VarChar(12)
+  nativeName  String
+  englishName String
+  direction   LanguageDirection @default(LTR)
+  isEnabled   Boolean           @default(false)
+  isDefault   Boolean           @default(false)
+  sortOrder   Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  deletedAt   DateTime?
+
+  translations TranslationEntry[]
+
+  @@index([isEnabled, sortOrder, deletedAt])
+}
+
+model TranslationEntry {
+  id         String    @id @default(uuid()) @db.Uuid
+  languageId String    @db.Uuid
+  namespace  String    @db.VarChar(120)
+  key        String    @db.VarChar(240)
+  value      String    @db.Text
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  language Language @relation(fields: [languageId], references: [id], onDelete: Cascade)
+
+  @@unique([languageId, namespace, key])
+  @@index([namespace, key, deletedAt])
+}
+
+// Every legacy discovery is reviewable and stays non-public until a human approves it.
+model ImportRecord {
+  id               String             @id @default(uuid()) @db.Uuid
+  sourceType       String             @db.VarChar(80)
+  sourceUrl        String             @db.Text
+  externalId       String?            @db.VarChar(160)
+  fingerprint      String             @unique @db.VarChar(64)
+  entityType       String?            @db.VarChar(80)
+  entityId         String?            @db.Uuid
+  status           ImportRecordStatus @default(DISCOVERED)
+  payload          Json?              @db.JsonB
+  missingFields    String[]
+  validationErrors String[]
+  retrievedAt      DateTime           @default(now())
+  reviewedAt       DateTime?
+  reviewedById     String?            @db.Uuid
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  reviewedBy User? @relation("ImportReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([sourceType, sourceUrl])
+  @@index([status, entityType, retrievedAt(sort: Desc)])
+  @@index([reviewedById, reviewedAt(sort: Desc)])
+}
+
+model PropertyAnalytics {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  metricDate DateTime @db.Date
+  views      Int      @default(0)
+  saves      Int      @default(0)
+  enquiries  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, metricDate])
+  @@index([metricDate])
+}
+
+model AiProviderConfiguration {
+  id                String     @id @default(uuid()) @db.Uuid
+  provider          AiProvider @unique
+  displayName       String
+  isEnabled         Boolean    @default(false)
+  priority          Int        @default(100)
+  baseUrl           String?    @db.Text
+  defaultModel      String
+  encryptedApiKey   String?    @db.Text
+  additionalConfig  Json?      @db.JsonB
+  timeoutMs         Int        @default(20000)
+  maxOutputTokens   Int        @default(2048)
+  dailyRequestLimit Int?
+  dailyTokenLimit   Int?
+  createdById       String?    @db.Uuid
+  updatedById       String?    @db.Uuid
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  deletedAt         DateTime?
+
+  createdBy User?        @relation("AiProviderConfigCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?        @relation("AiProviderConfigUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  usageLogs AiUsageLog[]
+
+  @@index([isEnabled, priority, deletedAt])
+}
+
+model AiPromptTemplate {
+  id           String    @id @default(uuid()) @db.Uuid
+  task         AiTask
+  locale       String    @default("tr") @db.VarChar(12)
+  name         String
+  version      Int       @default(1)
+  template     String    @db.Text
+  variables    String[]
+  outputSchema Json?     @db.JsonB
+  isActive     Boolean   @default(true)
+  createdById  String?   @db.Uuid
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  createdBy User?                   @relation("AiPromptTemplateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  messages  AiConversationMessage[]
+
+  @@unique([task, locale, version])
+  @@index([task, locale, isActive, deletedAt])
+}
+
+model AiConversation {
+  id            String               @id @default(uuid()) @db.Uuid
+  userId        String?              @db.Uuid
+  customerId    String?              @db.Uuid
+  task          AiTask
+  status        AiConversationStatus @default(ACTIVE)
+  locale        String               @default("tr") @db.VarChar(12)
+  title         String?
+  metadata      Json?                @db.JsonB
+  lastMessageAt DateTime             @default(now())
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  deletedAt     DateTime?
+
+  user      User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  customer  Customer?               @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  messages  AiConversationMessage[]
+  usageLogs AiUsageLog[]
+
+  @@index([userId, task, lastMessageAt(sort: Desc)])
+  @@index([customerId, task, lastMessageAt(sort: Desc)])
+  @@index([status, deletedAt, lastMessageAt(sort: Desc)])
+}
+
+model AiConversationMessage {
+  id               String        @id @default(uuid()) @db.Uuid
+  conversationId   String        @db.Uuid
+  promptTemplateId String?       @db.Uuid
+  role             AiMessageRole
+  content          String        @db.Text
+  provider         AiProvider?
+  model            String?
+  metadata         Json?         @db.JsonB
+  createdAt        DateTime      @default(now())
+
+  conversation   AiConversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  promptTemplate AiPromptTemplate? @relation(fields: [promptTemplateId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
+}
+
+model AiUsageLog {
+  id               String        @id @default(uuid()) @db.Uuid
+  requestId        String        @unique @default(uuid()) @db.Uuid
+  providerConfigId String?       @db.Uuid
+  provider         AiProvider
+  task             AiTask
+  status           AiUsageStatus
+  userId           String?       @db.Uuid
+  conversationId   String?       @db.Uuid
+  propertyId       String?       @db.Uuid
+  model            String
+  inputTokens      Int           @default(0)
+  outputTokens     Int           @default(0)
+  estimatedCostUsd Decimal?      @db.Decimal(18, 6)
+  durationMs       Int?
+  fallbackAttempt  Int           @default(0)
+  errorCode        String?
+  metadata         Json?         @db.JsonB
+  createdAt        DateTime      @default(now())
+
+  providerConfig AiProviderConfiguration? @relation(fields: [providerConfigId], references: [id], onDelete: SetNull)
+  user           User?                    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conversation   AiConversation?          @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  property       Property?                @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([providerConfigId, createdAt(sort: Desc)])
+  @@index([task, status, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([conversationId, createdAt(sort: Desc)])
+  @@index([propertyId, createdAt(sort: Desc)])
+}

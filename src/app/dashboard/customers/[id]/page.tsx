@@ -1,0 +1,5 @@
+import { notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { requireDashboardPermission } from "@/lib/auth/dashboard-access";
+import { CustomerEditor } from "@/components/admin/customer-editor";
+export default async function CustomerPage({ params }: { params: Promise<{ id: string }> }) { await requireDashboardPermission("crm.read"); const { id } = await params; const [customer, agents] = await Promise.all([prisma.customer.findFirst({ where: { id, deletedAt: null }, include: { notes: { where: { deletedAt: null }, orderBy: { createdAt: "desc" }, take: 20 }, tasks: { where: { deletedAt: null }, orderBy: { dueAt: "asc" }, take: 20 }, appointments: { where: { deletedAt: null }, orderBy: { startsAt: "desc" }, take: 20 }, timeline: { orderBy: { occurredAt: "desc" }, take: 50 } } }), prisma.user.findMany({ where: { status: "ACTIVE", deletedAt: null }, orderBy: { firstName: "asc" }, select: { id: true, firstName: true, lastName: true } })]); if (!customer) notFound(); return <CustomerEditor customer={{ ...customer, customFields: customer.customFields as Record<string, unknown> | null }} agents={agents} />; }
