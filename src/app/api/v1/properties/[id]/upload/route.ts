@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/rbac";
 import { assertCsrf } from "@/lib/security/csrf";
 import { prisma } from "@/lib/prisma";
 import { saveLocalPropertyFile } from "@/modules/media/local-property-storage";
+import { revalidatePublicPropertyCache } from "@/modules/properties/public-property-cache";
 
 export const runtime = "nodejs";
 const paramsSchema = z.object({ id: z.string().uuid() });
@@ -23,6 +24,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const currentCount = await prisma.propertyMedia.count({ where: { propertyId: id, deletedAt: null } });
     const saved = await Promise.all(files.map((file) => saveLocalPropertyFile(id, file)));
     const media = await prisma.$transaction(async (tx) => Promise.all(saved.map((item, index) => tx.propertyMedia.create({ data: { propertyId: id, ...item, title: files[index].name.slice(0, 180), sortOrder: currentCount + index, isCover: currentCount === 0 && index === 0 } }))));
+    revalidatePublicPropertyCache();
     return ok(media, 201);
   } catch (error) { return fail(error); }
 }

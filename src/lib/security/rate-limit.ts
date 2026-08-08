@@ -2,7 +2,7 @@ import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import { ApiError } from "@/lib/http";
 
-type Window = "login" | "password-reset" | "sensitive" | "ai";
+type Window = "login" | "password-reset" | "sensitive" | "ai" | "public-form";
 type RateLimitDuration = Parameters<typeof Ratelimit.slidingWindow>[1];
 
 const policies: Record<Window, { limit: number; window: RateLimitDuration }> = {
@@ -10,6 +10,7 @@ const policies: Record<Window, { limit: number; window: RateLimitDuration }> = {
   "password-reset": { limit: 5, window: "1 h" },
   sensitive: { limit: 10, window: "15 m" },
   ai: { limit: 30, window: "1 m" },
+  "public-form": { limit: 5, window: "1 h" },
 };
 
 const redis = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
@@ -46,7 +47,7 @@ export async function enforceRateLimit(window: Window, key: string) {
   const now = Date.now();
   const bucketKey = `${window}:${key}`;
   const bucket = developmentBuckets.get(bucketKey);
-  const windowMs = window === "password-reset" ? 3_600_000 : window === "ai" ? 60_000 : 900_000;
+  const windowMs = window === "password-reset" || window === "public-form" ? 3_600_000 : window === "ai" ? 60_000 : 900_000;
   if (!bucket || bucket.resetAt <= now) {
     developmentBuckets.set(bucketKey, { count: 1, resetAt: now + windowMs });
     return;

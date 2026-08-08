@@ -60,6 +60,19 @@ enum PropertyMediaKind {
   FLOOR_PLAN
 }
 
+enum PropertyInteractionType {
+  VIEW
+  WHATSAPP_CLICK
+  PHONE_CLICK
+  CONTACT_SUBMITTED
+  SHARE
+  MAP_INTERACTION
+  GALLERY_INTERACTION
+  AI_IMPRESSION
+  AI_CLICK
+  FAVORITE
+}
+
 enum CustomerStatus {
   LEAD
   PROSPECT
@@ -501,17 +514,19 @@ model Property {
   updatedAt       DateTime       @updatedAt
   deletedAt       DateTime?
 
-  type          PropertyType           @relation(fields: [typeId], references: [id], onDelete: Restrict)
-  createdBy     User?                  @relation("PropertyCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy     User?                  @relation("PropertyUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  assignedAgent User?                  @relation("PropertyAssignedAgent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
-  features      PropertyFeatureValue[]
-  media         PropertyMedia[]
-  leads         Lead[]
-  appointments  Appointment[]
-  tasks         Task[]
-  analytics     PropertyAnalytics[]
-  aiUsageLogs   AiUsageLog[]
+  type              PropertyType               @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  createdBy         User?                      @relation("PropertyCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy         User?                      @relation("PropertyUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  assignedAgent     User?                      @relation("PropertyAssignedAgent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  features          PropertyFeatureValue[]
+  media             PropertyMedia[]
+  leads             Lead[]
+  appointments      Appointment[]
+  tasks             Task[]
+  analytics         PropertyAnalytics[]
+  interactionEvents PropertyInteractionEvent[]
+  analyticsVisitors PropertyAnalyticsVisitor[]
+  aiUsageLogs       AiUsageLog[]
 
   @@index([status, listingType, publishedAt(sort: Desc), deletedAt])
   @@index([typeId, status])
@@ -809,6 +824,32 @@ model TranslationEntry {
   @@index([namespace, key, deletedAt])
 }
 
+model SiteContent {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique @db.VarChar(120)
+  content     Json     @db.JsonB
+  isPublished Boolean  @default(true)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  @@index([isPublished, deletedAt])
+}
+
+model RegionKnowledge {
+  id          String   @id @default(uuid()) @db.Uuid
+  slug        String   @unique @db.VarChar(120)
+  isPublished Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  content     Json     @db.JsonB
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  @@index([isPublished, sortOrder, deletedAt])
+}
+
 // Every legacy discovery is reviewable and stays non-public until a human approves it.
 model ImportRecord {
   id               String             @id @default(uuid()) @db.Uuid
@@ -836,18 +877,57 @@ model ImportRecord {
 }
 
 model PropertyAnalytics {
-  id         String   @id @default(uuid()) @db.Uuid
-  propertyId String   @db.Uuid
-  metricDate DateTime @db.Date
-  views      Int      @default(0)
-  saves      Int      @default(0)
-  enquiries  Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id                  String   @id @default(uuid()) @db.Uuid
+  propertyId          String   @db.Uuid
+  metricDate          DateTime @db.Date
+  views               Int      @default(0)
+  uniqueViews         Int      @default(0)
+  saves               Int      @default(0)
+  enquiries           Int      @default(0)
+  whatsappClicks      Int      @default(0)
+  phoneClicks         Int      @default(0)
+  shareClicks         Int      @default(0)
+  mapInteractions     Int      @default(0)
+  galleryInteractions Int      @default(0)
+  aiImpressions       Int      @default(0)
+  aiClicks            Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@unique([propertyId, metricDate])
+  @@index([metricDate])
+}
+
+model PropertyInteractionEvent {
+  id             String                  @id @default(uuid()) @db.Uuid
+  propertyId     String                  @db.Uuid
+  type           PropertyInteractionType
+  visitorHash    String                  @db.VarChar(64)
+  source         String?                 @db.VarChar(240)
+  locale         String?                 @db.VarChar(12)
+  deviceCategory String?                 @db.VarChar(20)
+  metadata       Json?                   @db.JsonB
+  occurredAt     DateTime                @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, type, occurredAt(sort: Desc)])
+  @@index([propertyId, visitorHash, type, occurredAt(sort: Desc)])
+  @@index([occurredAt(sort: Desc)])
+}
+
+model PropertyAnalyticsVisitor {
+  id          String   @id @default(uuid()) @db.Uuid
+  propertyId  String   @db.Uuid
+  metricDate  DateTime @db.Date
+  visitorHash String   @db.VarChar(64)
+  createdAt   DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, metricDate, visitorHash])
   @@index([metricDate])
 }
 

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/http";
 import { type z } from "zod";
 import { propertyInputSchema, propertyQuerySchema } from "@/modules/properties/property.schemas";
+import { revalidatePublicPropertyCache } from "@/modules/properties/public-property-cache";
 
 type PropertyInput = z.infer<typeof propertyInputSchema>;
 type PropertyQuery = z.infer<typeof propertyQuerySchema>;
@@ -26,7 +27,9 @@ export async function createProperty(input: PropertyInput, actorId: string) {
   if (exists) throw new ApiError(409, "Bu ilan numarası zaten kullanılıyor.", "DUPLICATE_PROPERTY_ID");
   const slug = await uniqueSlug(input.title);
   const { propertyId: _ignoredPropertyId, ...data } = input;
-  return prisma.property.create({ data: { ...data, propertyId, slug, status, createdById: actorId, updatedById: actorId, publishedAt: status === PropertyStatus.PUBLISHED ? new Date() : null, searchVector: [input.title, input.city, input.district, input.neighborhood].filter(Boolean).join(" ") } });
+  const property = await prisma.property.create({ data: { ...data, propertyId, slug, status, createdById: actorId, updatedById: actorId, publishedAt: status === PropertyStatus.PUBLISHED ? new Date() : null, searchVector: [input.title, input.city, input.district, input.neighborhood].filter(Boolean).join(" ") } });
+  revalidatePublicPropertyCache();
+  return property;
 }
 
 export async function updateProperty(id: string, input: Partial<PropertyInput>, actorId: string) {
@@ -35,5 +38,7 @@ export async function updateProperty(id: string, input: Partial<PropertyInput>, 
     const duplicate = await prisma.property.findUnique({ where: { propertyId: input.propertyId }, select: { id: true } });
     if (duplicate) throw new ApiError(409, "Bu ilan numarası zaten kullanılıyor.", "DUPLICATE_PROPERTY_ID");
   }
-  return prisma.property.update({ where: { id }, data: { ...input, slug: title !== current.title ? await uniqueSlug(title, id) : undefined, updatedById: actorId, publishedAt: status === PropertyStatus.PUBLISHED && current.status !== PropertyStatus.PUBLISHED ? new Date() : undefined, soldAt: status === PropertyStatus.SOLD && current.status !== PropertyStatus.SOLD ? new Date() : undefined, rentedAt: status === PropertyStatus.RENTED && current.status !== PropertyStatus.RENTED ? new Date() : undefined, searchVector: [title, input.city ?? current.city, input.district ?? current.district, input.neighborhood ?? current.neighborhood].filter(Boolean).join(" ") } });
+  const property = await prisma.property.update({ where: { id }, data: { ...input, slug: title !== current.title ? await uniqueSlug(title, id) : undefined, updatedById: actorId, publishedAt: status === PropertyStatus.PUBLISHED && current.status !== PropertyStatus.PUBLISHED ? new Date() : undefined, soldAt: status === PropertyStatus.SOLD && current.status !== PropertyStatus.SOLD ? new Date() : undefined, rentedAt: status === PropertyStatus.RENTED && current.status !== PropertyStatus.RENTED ? new Date() : undefined, searchVector: [title, input.city ?? current.city, input.district ?? current.district, input.neighborhood ?? current.neighborhood].filter(Boolean).join(" ") } });
+  revalidatePublicPropertyCache();
+  return property;
 }

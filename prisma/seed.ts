@@ -10,7 +10,15 @@ const permissions = [
   ["properties.publish", "properties", "publish"], ["crm.read", "crm", "read"],
   ["crm.manage", "crm", "manage"], ["appointments.manage", "appointments", "manage"],
   ["reports.read", "reports", "read"], ["settings.manage", "settings", "manage"],
+  ["content.manage", "content", "manage"],
   ["ai.use", "ai", "use"], ["ai.manage", "ai", "manage"], ["ai.analytics", "ai", "analytics"],
+] as const;
+
+const propertyTypes = [
+  ["VILLA", "Villa"], ["APARTMENT", "Daire"], ["DETACHED_HOUSE", "Müstakil Ev"],
+  ["RESIDENCE", "Rezidans"], ["LAND", "Arsa"], ["FIELD", "Tarla"],
+  ["COMMERCIAL", "Ticari"], ["OFFICE", "Ofis"], ["SHOP", "Dükkan"],
+  ["HOTEL", "Otel"], ["WAREHOUSE", "Depo"], ["BUILDING", "Bina"],
 ] as const;
 
 async function main() {
@@ -34,7 +42,16 @@ async function main() {
   await prisma.rolePermission.createMany({ data: records.filter((p) => managerKeys.has(p.key)).map((p) => ({ roleId: manager.id, permissionId: p.id })), skipDuplicates: true });
   await prisma.rolePermission.createMany({ data: records.filter((p) => agentKeys.has(p.key)).map((p) => ({ roleId: agent.id, permissionId: p.id })), skipDuplicates: true });
 
-  await prisma.propertyType.upsert({ where: { key: "VILLA" }, update: { name: "Villa", isActive: true }, create: { key: "VILLA", name: "Villa", isActive: true } });
+  for (const [position, [key, name]] of propertyTypes.entries()) {
+    await prisma.propertyType.upsert({ where: { key }, update: { name, isActive: true, position }, create: { key, name, isActive: true, position } });
+  }
+
+  for (const key of ["homepage", "aiAssistant", "footer"]) {
+    await prisma.siteContent.upsert({ where: { key }, update: {}, create: { key, content: {} } });
+  }
+  for (const [sortOrder, slug] of ["fethiye", "calis", "koca-calis", "gocek", "ovacik", "hisaronu", "oludeniz", "kayakoy", "karagozler", "faralya", "uzumlu", "seydikemer"].entries()) {
+    await prisma.regionKnowledge.upsert({ where: { slug }, update: { sortOrder }, create: { slug, sortOrder, content: {}, isPublished: false } });
+  }
 }
 
 main().finally(() => prisma.$disconnect());

@@ -15,6 +15,11 @@ function isLocalOrigin(value: string) {
   return hostname === "localhost" || hostname === "127.0.0.1";
 }
 
+function shouldUseSecureCookie() {
+  const configuredOrigin = process.env.NEXT_PUBLIC_APP_URL ?? process.env.AUTH_URL;
+  return configuredOrigin ? new URL(configuredOrigin).protocol === "https:" : process.env.NODE_ENV === "production";
+}
+
 export function assertTrustedOrigin(request: NextRequest) {
   const origin = request.headers.get("origin");
   if (!origin) return;
@@ -39,7 +44,8 @@ export function issueCsrf(response: NextResponse) {
   const token = randomToken();
   response.cookies.set(CSRF_COOKIE, token, {
     httpOnly: false,
-    secure: process.env.NODE_ENV === "production",
+    // Local `next start` also runs with NODE_ENV=production, but localhost commonly uses HTTP.
+    secure: shouldUseSecureCookie(),
     sameSite: "strict",
     path: "/",
     maxAge: 60 * 60,

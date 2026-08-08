@@ -9,11 +9,23 @@ const accepted = new Map([
   ["image/jpeg", "jpg"], ["image/png", "png"], ["image/webp", "webp"], ["application/pdf", "pdf"],
 ]);
 
+function canUseLocalStorage() {
+  if (process.env.LOCAL_MEDIA_STORAGE_ENABLED === "true" || process.env.NODE_ENV !== "production") return true;
+  const origin = process.env.NEXT_PUBLIC_APP_URL ?? process.env.AUTH_URL;
+  if (!origin) return false;
+  try {
+    const hostname = new URL(origin).hostname;
+    return hostname === "localhost" || hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
 export async function saveLocalPropertyFile(propertyId: string, file: File) {
   const extension = accepted.get(file.type);
   if (!extension) throw new ApiError(400, "Desteklenmeyen dosya türü. JPG, PNG, WEBP veya PDF yükleyin.", "UNSUPPORTED_MEDIA_TYPE");
   if (file.size === 0 || file.size > MAX_UPLOAD_BYTES) throw new ApiError(400, "Dosya 10 MB sınırını aşmamalıdır.", "MEDIA_TOO_LARGE");
-  if (process.env.NODE_ENV === "production" && !process.env.LOCAL_MEDIA_STORAGE_ENABLED) {
+  if (!canUseLocalStorage()) {
     throw new ApiError(503, "Üretim ortamı için S3 veya Cloudinary depolama sağlayıcısı yapılandırılmalıdır.", "MEDIA_STORAGE_UNAVAILABLE");
   }
   const filename = `${crypto.randomUUID()}.${extension}`;

@@ -105,6 +105,15 @@ button, input, textarea, select { font: inherit; }
   to { height: 0; }
 }
 
+@keyframes hero-drift {
+  from { transform: scale(1.035) translate3d(-0.45%, -0.3%, 0); }
+  to { transform: scale(1.075) translate3d(0.45%, 0.3%, 0); }
+}
+
 .animate-bersu-in { animation: bersu-fade-in 180ms ease-out both; }
 .animate-accordion-down { animation: bersu-accordion-open 180ms ease-out; }
 .animate-accordion-up { animation: bersu-accordion-close 180ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
